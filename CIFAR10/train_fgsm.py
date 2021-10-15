@@ -109,6 +109,8 @@ def main():
                     delta[:, j, :, :].uniform_(-epsilon[j][0][0].item(), epsilon[j][0][0].item())
                 delta.data = clamp(delta, lower_limit - X, upper_limit - X)
             delta.requires_grad = True
+
+            # 1st eval
             output = model(X + delta[:X.size(0)])
             loss = F.cross_entropy(output, y)
             with amp.scale_loss(loss, opt) as scaled_loss:
@@ -117,15 +119,18 @@ def main():
             delta.data = clamp(delta + alpha * torch.sign(grad), -epsilon, epsilon)
             delta.data[:X.size(0)] = clamp(delta[:X.size(0)], lower_limit - X, upper_limit - X)
             delta = delta.detach()
+
             output = model(X + delta[:X.size(0)])
             loss = criterion(output, y)
             opt.zero_grad()
             with amp.scale_loss(loss, opt) as scaled_loss:
                 scaled_loss.backward()
+            
             opt.step()
             train_loss += loss.item() * y.size(0)
             train_acc += (output.max(1)[1] == y).sum().item()
             train_n += y.size(0)
+
             scheduler.step()
         if args.early_stop:
             # Check current PGD robustness of model using random minibatch
